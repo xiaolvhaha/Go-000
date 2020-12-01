@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-type user struct {
+type User struct {
 	ID   uint `db:"id"`
 	Name string `db:"name"`
 }
@@ -27,7 +27,7 @@ func init(){
 
 
 func main() {
-	usr, err := service(10000)
+	user, err := service(10000)
 
 	if err != nil {
 		if errors.Is(errors.Cause(err), sql.ErrNoRows) {
@@ -38,18 +38,18 @@ func main() {
 		fmt.Println("sth go wrong")
 		return
 	}
-	fmt.Println("200", usr.Name)
+	fmt.Println("200", user.Name)
 	defer Db.Close()
 }
 
 
-func service(id uint) (*user, error) {
+func service(id uint) (*User, error) {
 	return dao(id)
 }
 
-func dao(id uint) (*user, error) {
-	var usr user
-	err := Db.QueryRow("select id, name from user where id = ?", id).Scan(&usr.ID, &usr.Name)
+func dao(id uint) (*User, error) {
+	var user User
+	err := Db.QueryRow("select id, name from user where id = ?", id).Scan(&user.ID, &user.Name)
 	if err == sql.ErrNoRows {
 
 		return nil, errors.Wrapf(err, "user can not found by id:%d", id)
@@ -57,5 +57,5 @@ func dao(id uint) (*user, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "err")
 	}
-	return &usr, nil
+	return &user, nil
 }
