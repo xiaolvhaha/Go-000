@@ -1,62 +1,58 @@
 package main
 
 import (
-	"fmt"
-	"github.com/golang/sync/errgroup"
-	"golang.org/x/net/context"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
+ "context"
+ "errors"
+ "fmt"
+ "go-project-layout/server/http"
+ "os"
+ "os/signal"
+ "syscall"
+ "time"
+
+ "golang.org/x/sync/errgroup"
 )
 
+func main() {
+ g, ctx := errgroup.WithContext(context.Background())
+ svr := http.NewServer()
+ // http server
+ g.Go(func() error {
+  fmt.Println("http")
+  go func() {
+   <-ctx.Done()
+   fmt.Println("http ctx done")
+   svr.Shutdown(context.TODO())
+  }()
+  return svr.Start()
+ })
 
-func main(){
+ // signal
+ g.Go(func() error {
+  exitSignals := []os.Signal{os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGINT} // SIGTERM is POSIX specific
+  sig := make(chan os.Signal, len(exitSignals))
+  signal.Notify(sig, exitSignals...)
+  for {
+   fmt.Println("signal")
+   select {
+   case <-ctx.Done():
+    fmt.Println("signal ctx done")
+    return ctx.Err()
+   case <-sig:
+    // do something
+    return nil
+   }
+  }
+ })
 
-	ctx := context.Background()
+ // inject error
+ g.Go(func() error {
+  fmt.Println("inject")
+  time.Sleep(time.Second)
+  fmt.Println("inject finish")
+  return errors.New("inject error")
+ })
 
-	ctx,cancel := context.WithTimeout(ctx,30*time.Second)
-	g, ctx := errgroup.WithContext(ctx)
-	server :=&http.Server{
-		Addr:    "localhost:8080",
-		Handler: nil,
-	}
-	g.Go(func() error {
-		//开启http服务
-		 err := server.ListenAndServe()
-		 if err != http.ErrServerClosed {
-			return err
-		}
-		return nil
-	})
-
-	//do sth...
-
-
-	c := make(chan os.Signal, 3)
-	signal.Notify(c, syscall.SIGHUP, os.Kill,syscall.SIGINT)
-
-	g.Go(func() error {
-		select {
-		case <-c:
-			//理论上需要注册一下这里可以打印出收到了哪种信号
-			fmt.Println("收到信号")
-			time.Sleep(10*time.Second)
-			fmt.Println("退出")
-			cancel()
-
-		case <-ctx.Done():
-			fmt.Println("退出2")
-			server.Shutdown(ctx)
-		}
-		return nil
-	})
-
-	if err := g.Wait(); err != nil {
-		fmt.Println(err)
-	}
-
-
-
+ err := g.Wait() // first error return
+ fmt.Println(err)
 }
